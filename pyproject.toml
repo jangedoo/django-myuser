@@ -27,4 +27,6 @@ build-backend = "poetry.core.masonry.api"
 pytest = "^8.4.1"
 pytest-django = "^4.11.1"
 pytest-cov = "^6.2.1"
+factory-boy = "^3.3.3"
+faker = "^37.6.0"
 

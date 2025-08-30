@@ -49,7 +49,7 @@ class GoogleSocialLoginView(SocialLoginView):
 
     def create_user_session(self, user, refresh_token):
         """Create a UserSession record for tracking"""
-        ip_address = self.get_client_ip()
+        ip_address = self.get_client_ip() or '127.0.0.1'  # Default to localhost if None
         user_agent = self.request.META.get('HTTP_USER_AGENT', '')[:255]
         
         UserSession.objects.create(
@@ -101,7 +101,7 @@ class GitHubSocialLoginView(SocialLoginView):
 
     def create_user_session(self, user, refresh_token):
         """Create a UserSession record for tracking"""
-        ip_address = self.get_client_ip()
+        ip_address = self.get_client_ip() or '127.0.0.1'  # Default to localhost if None
         user_agent = self.request.META.get('HTTP_USER_AGENT', '')[:255]
         
         UserSession.objects.create(
@@ -153,7 +153,7 @@ class FacebookSocialLoginView(SocialLoginView):
 
     def create_user_session(self, user, refresh_token):
         """Create a UserSession record for tracking"""
-        ip_address = self.get_client_ip()
+        ip_address = self.get_client_ip() or '127.0.0.1'  # Default to localhost if None
         user_agent = self.request.META.get('HTTP_USER_AGENT', '')[:255]
         
         UserSession.objects.create(

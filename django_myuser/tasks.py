@@ -99,9 +99,16 @@ def cleanup_expired_sessions():
     from datetime import timedelta
     from .models import UserSession
     
-    # Delete sessions older than 30 days
+    # Soft delete sessions older than 30 days
     cutoff_date = timezone.now() - timedelta(days=30)
-    deleted_count = UserSession.objects.filter(last_activity__lt=cutoff_date).delete()[0]
+    sessions_to_delete = UserSession.objects.filter(
+        last_activity__lt=cutoff_date,
+        deleted_at__isnull=True  # Only delete non-deleted sessions
+    )
+    deleted_count = sessions_to_delete.count()
+    
+    # Soft delete by setting deleted_at timestamp
+    sessions_to_delete.update(deleted_at=timezone.now())
     
     return f"Cleaned up {deleted_count} expired sessions"
 

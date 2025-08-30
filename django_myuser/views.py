@@ -3,8 +3,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+from django.contrib.auth.signals import user_logged_out
 
-from .serializers import LogoutSerializer, ProfileSerializer, DataRequestSerializer, UserSessionSerializer
+from .serializers import (
+    LogoutSerializer, ProfileSerializer, DataRequestSerializer, 
+    UserSessionSerializer, CustomTokenObtainPairSerializer
+)
 from .models import Profile, DataRequest, UserSession
 from .throttles import (
     LoginRateThrottle, 
@@ -12,6 +17,14 @@ from .throttles import (
     DataRequestRateThrottle, 
     ProfileUpdateRateThrottle
 )
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom JWT token view that integrates with session tracking and audit logging.
+    """
+    serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 
 class LogoutView(APIView):
@@ -22,11 +35,29 @@ class LogoutView(APIView):
     def post(self, request):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
         try:
             refresh_token = serializer.validated_data["refresh"]
+            
+            # Remove user session associated with this refresh token
+            UserSession.objects.filter(
+                user=request.user,
+                refresh_token=refresh_token
+            ).delete()
+            
+            # Emit user_logged_out signal for audit logging
+            user_logged_out.send(
+                sender=request.user.__class__,
+                request=request,
+                user=request.user
+            )
+            
+            # Blacklist the refresh token
             token = RefreshToken(refresh_token)
             token.blacklist()
+            
             return Response(status=status.HTTP_205_RESET_CONTENT)
+            
         except Exception as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
@@ -47,7 +78,7 @@ class DataRequestView(generics.ListCreateAPIView):
     serializer_class = DataRequestSerializer
 
     def get_queryset(self):
-        return DataRequest.objects.filter(user=self.request.user)
+        return DataRequest.objects.filter(user=self.request.user).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

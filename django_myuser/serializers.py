@@ -1,4 +1,8 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.signals import user_logged_in, user_login_failed
+from django.utils import timezone
 from allauth.socialaccount.models import SocialAccount
 from dj_rest_auth.registration.serializers import SocialLoginSerializer as BaseSocialLoginSerializer
 from .models import Profile, DataRequest, UserSession, AuditLog
@@ -6,6 +10,74 @@ from .models import Profile, DataRequest, UserSession, AuditLog
 
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Custom JWT token serializer that integrates with Django's authentication signals
+    and creates user sessions for tracking.
+    """
+    
+    def validate(self, attrs):
+        """
+        Validate credentials and emit authentication signals.
+        """
+        request = self.context.get('request')
+        
+        try:
+            # Call parent validation which will raise ValidationError if credentials are invalid
+            data = super().validate(attrs)
+            
+            # Get user IP and user agent
+            ip_address = self._get_client_ip(request)
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:255]
+            
+            # Emit user_logged_in signal (for audit logging)
+            user_logged_in.send(
+                sender=self.user.__class__,
+                request=request,
+                user=self.user
+            )
+            
+            # Create or update user session
+            refresh_token = data['refresh']
+            self._create_user_session(self.user, refresh_token, ip_address, user_agent)
+            
+            return data
+            
+        except Exception as e:
+            # If validation fails, emit login_failed signal
+            username = attrs.get('username', attrs.get('email', 'unknown'))
+            user_login_failed.send(
+                sender=None,
+                credentials={'username': username},
+                request=request
+            )
+            # Re-raise the original exception
+            raise e
+    
+    def _get_client_ip(self, request):
+        """Extract the real IP address from the request."""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR', '127.0.0.1')
+        return ip
+    
+    def _create_user_session(self, user, refresh_token, ip_address, user_agent):
+        """Create a user session entry for tracking."""
+        # Remove any existing session with the same refresh token
+        UserSession.objects.filter(refresh_token=refresh_token).delete()
+        
+        # Create new session
+        UserSession.objects.create(
+            user=user,
+            refresh_token=refresh_token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            last_activity=timezone.now()
+        )
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -18,8 +90,8 @@ class ProfileSerializer(serializers.ModelSerializer):
 class DataRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = DataRequest
-        fields = ('request_type', 'status', 'notes')
-        read_only_fields = ('status',)
+        fields = ('id', 'request_type', 'status', 'notes', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'status', 'created_at', 'updated_at')
 
 
 class UserSessionSerializer(serializers.ModelSerializer):
@@ -161,7 +233,10 @@ class AuditLogSerializer(serializers.ModelSerializer):
             'description',
             'created_at'
         )
-        read_only_fields = '__all__'  # All fields are read-only for security
+        read_only_fields = (
+            'id', 'user', 'user_display', 'event_type', 'event_type_display',
+            'ip_address', 'user_agent', 'description', 'created_at'
+        )
     
     def get_user_display(self, obj):
         """Get user display name"""
