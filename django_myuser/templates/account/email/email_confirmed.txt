@@ -1,0 +1,10 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Your email address {{ email_address }} has been successfully confirmed!
+
+Your account is now fully activated and you can access all features of our platform.
+
+Thank you for confirming your email address.
+
+Best regards,
+The Team

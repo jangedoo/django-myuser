@@ -1,0 +1,12 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Thank you for signing up with our platform! To complete your registration, please verify your email address by clicking the link below:
+
+{{ activate_url }}
+
+If you didn't create this account, you can safely ignore this email.
+
+This link will expire in {{ expiration_days }} days.
+
+Best regards,
+The Team

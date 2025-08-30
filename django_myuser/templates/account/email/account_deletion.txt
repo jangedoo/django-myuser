@@ -1,0 +1,12 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Your account deletion request has been processed.
+
+We're sorry to see you go. Your account and associated data will be removed according to our data retention policy.
+
+If you change your mind, you can create a new account at any time.
+
+Thank you for being part of our platform.
+
+Best regards,
+The Team

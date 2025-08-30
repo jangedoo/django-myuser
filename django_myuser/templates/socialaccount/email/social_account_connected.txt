@@ -1,0 +1,10 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Your {{ provider_display }} account has been successfully connected to your account.
+
+You can now log in using your {{ provider_display }} credentials in addition to your email and password.
+
+If you didn't connect this account, please contact our support team immediately.
+
+Best regards,
+The Team

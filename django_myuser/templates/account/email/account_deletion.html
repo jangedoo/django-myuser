@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Account Deletion Processed</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc3545; color: white; padding: 20px; text-align: center; }
+        .content { padding: 20px; background-color: #f8f9fa; }
+        .info { 
+            background-color: #f8d7da; 
+            border: 1px solid #f5c6cb; 
+            padding: 15px; 
+            border-radius: 4px; 
+            margin: 15px 0; 
+        }
+        .footer { text-align: center; font-size: 12px; color: #666; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Account Deletion Processed</h1>
+        </div>
+        <div class="content">
+            <h2>Hello {{ user.get_full_name|default:user.username }},</h2>
+            
+            <div class="info">
+                <p><strong>Your account deletion request has been processed.</strong></p>
+            </div>
+            
+            <p>We're sorry to see you go. Your account and associated data will be removed according to our data retention policy.</p>
+            
+            <p>If you change your mind, you can create a new account at any time.</p>
+            
+            <p>Thank you for being part of our platform.</p>
+        </div>
+        <div class="footer">
+            <p>Best regards,<br>The Team</p>
+        </div>
+    </div>
+</body>
+</html>

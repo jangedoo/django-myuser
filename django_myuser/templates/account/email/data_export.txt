@@ -1,0 +1,14 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+Your data export request has been processed successfully.
+
+Your personal data is attached below:
+
+{{ data }}
+
+This export includes all the personal information we have on file for your account.
+
+If you have any questions about this data export, please contact our support team.
+
+Best regards,
+The Team
