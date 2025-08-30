@@ -1,12 +1,45 @@
 [project]
 name = "django-myuser"
 version = "0.1.0"
-description = ""
+description = "A comprehensive Django package for advanced user authentication, user data management"
 authors = [
-    {name = "Sanjaya Subedi"}
+    {name = "Sanjaya Subedi", email = "jangedoo@gmail.com"}
 ]
 readme = "README.md"
-requires-python = "^3.11"
+license = {text = "MIT"}
+homepage = "https://github.com/jangedoo/django-myuser"
+repository = "https://github.com/jangedoo/django-myuser"
+documentation = "https://github.com/jangedoo/django-myuser/blob/main/README.md"
+keywords = [
+    "django",
+    "authentication",
+    "jwt",
+    "social-auth",
+    "gdpr",
+    "user-management",
+    "rest-api",
+    "celery",
+    "audit-logging"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration :: Authentication/Directory"
+]
+requires-python = ">=3.11"
 dependencies = [
     "django (>=5.0)",
     "djangorestframework (>=3.16.1,<4.0.0)",
