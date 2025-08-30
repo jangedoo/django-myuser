@@ -10,8 +10,10 @@ This document provides detailed configuration options for the django-myuser pack
 - [Email Configuration](#email-configuration)
 - [Celery Configuration](#celery-configuration)
 - [Rate Limiting](#rate-limiting)
-- [Database Configuration](#database-configuration)
+- [Database Configuration](#database-configuration)  
 - [Security Settings](#security-settings)
+- [Django-MyUser Package Settings](#django-myuser-package-settings)
+- [Custom Data Exporters](#custom-data-exporters)
 - [Environment-Specific Configurations](#environment-specific-configurations)
 - [Advanced Features](#advanced-features)
 
@@ -605,6 +607,191 @@ CSP_IMG_SRC = ("'self'", "data:", "https:")
 CSP_FONT_SRC = ("'self'",)
 CSP_CONNECT_SRC = ("'self'",)
 CSP_FRAME_ANCESTORS = ("'none'",)
+```
+
+---
+
+## Django-MyUser Package Settings
+
+The `DJANGO_MYUSER` setting dictionary provides configuration options specific to the django-myuser package.
+
+### Basic Configuration
+
+```python
+# settings.py
+
+DJANGO_MYUSER = {
+    # Data Export Settings
+    'DATA_EXPORTER_CLASS': 'django_myuser.exporters.DefaultUserDataExporter',
+    'EXPORT_FILE_PATH': 'data_exports/',
+    'EXPORT_FILE_RETENTION_DAYS': 7,
+    'BASE_URL': 'https://yourdomain.com',
+}
+```
+
+### Configuration Options
+
+#### Data Export Settings
+
+- **`DATA_EXPORTER_CLASS`** (default: `'django_myuser.exporters.DefaultUserDataExporter'`)
+  - Full import path to custom data exporter class
+  - Must inherit from `django_myuser.exporters.UserDataExporter`
+
+- **`EXPORT_FILE_PATH`** (default: `'data_exports/'`)
+  - Directory path relative to `MEDIA_ROOT` where export files are stored
+  - Directory will be created automatically if it doesn't exist
+
+- **`EXPORT_FILE_RETENTION_DAYS`** (default: `7`)
+  - Number of days to retain export files before automatic cleanup
+  - Files are automatically deleted after this period
+
+- **`BASE_URL`** (default: `'https://example.com'`)
+  - Base URL used in download links sent via email
+  - Should match your production domain
+
+### Example with All Options
+
+```python
+DJANGO_MYUSER = {
+    # Custom exporter for application-specific data
+    'DATA_EXPORTER_CLASS': 'myapp.exporters.CustomUserDataExporter',
+    
+    # Store exports in a custom directory
+    'EXPORT_FILE_PATH': 'user_data_exports/',
+    
+    # Keep files for 14 days
+    'EXPORT_FILE_RETENTION_DAYS': 14,
+    
+    # Production domain
+    'BASE_URL': 'https://api.yourdomain.com',
+}
+```
+
+---
+
+## Custom Data Exporters
+
+### Creating a Custom Exporter
+
+To customize what data is exported for users, create a custom exporter class:
+
+```python
+# myapp/exporters.py
+from django_myuser.exporters import UserDataExporter
+
+class CustomUserDataExporter(UserDataExporter):
+    def generate_data(self, data_request, user):
+        """Generate custom export data for the user."""
+        with self.create_export_builder(user) as builder:
+            # Add standard user data
+            builder.add_json_file('user_info.json', {
+                'username': user.username,
+                'email': user.email,
+                'date_joined': user.date_joined,
+            })
+            
+            # Add application-specific data
+            builder.add_json_file('orders.json', self.get_user_orders(user))
+            builder.add_csv_file('activity_log.csv', self.get_user_activities(user))
+            builder.add_jsonl_file('large_dataset.jsonl', self.get_large_dataset(user))
+            
+            # Add custom files
+            builder.add_raw_file('README.txt', 'This is your personal data export.')
+            
+            return builder.create_archive('custom_user_export')
+    
+    def get_user_orders(self, user):
+        """Collect user's order data."""
+        from myapp.models import Order
+        return [
+            {
+                'id': order.id,
+                'total': str(order.total),
+                'date': order.created_at,
+                'status': order.status,
+            }
+            for order in user.orders.all()
+        ]
+    
+    def get_user_activities(self, user):
+        """Generate user activity data as iterator for memory efficiency."""
+        from myapp.models import UserActivity
+        
+        # Use iterator for large datasets
+        activities = user.activities.all()
+        for activity in activities.iterator(chunk_size=1000):
+            yield {
+                'timestamp': activity.timestamp,
+                'action': activity.action,
+                'ip_address': activity.ip_address,
+            }
+    
+    def get_large_dataset(self, user):
+        """Generate large dataset using generators for memory efficiency."""
+        from myapp.models import UserInteraction
+        
+        # Stream large datasets using JSONL format
+        interactions = user.interactions.all()
+        for interaction in interactions.iterator(chunk_size=500):
+            yield {
+                'timestamp': interaction.timestamp,
+                'type': interaction.interaction_type,
+                'data': interaction.data,
+            }
+```
+
+### Register Custom Exporter
+
+```python
+# settings.py
+DJANGO_MYUSER = {
+    'DATA_EXPORTER_CLASS': 'myapp.exporters.CustomUserDataExporter',
+}
+```
+
+### ExportBuilder Methods
+
+The `ExportBuilder` class provides methods for different file formats:
+
+#### JSON Files
+```python
+builder.add_json_file('data.json', {'key': 'value'}, indent=2)
+```
+
+#### CSV Files (Memory Efficient)
+```python
+# Works with generators for large datasets
+builder.add_csv_file('data.csv', self.generate_rows(user))
+```
+
+#### JSON Lines (For Large Datasets)
+```python
+# Ideal for streaming large datasets
+builder.add_jsonl_file('logs.jsonl', self.generate_log_entries(user))
+```
+
+#### Raw Files
+```python
+# Text or binary files
+builder.add_raw_file('readme.txt', 'Export information')
+builder.add_raw_file('data.bin', binary_data)
+```
+
+### Memory Efficiency Best Practices
+
+For large datasets, use generators instead of loading all data into memory:
+
+```python
+def get_user_data(self, user):
+    """Use iterator for memory-efficient data processing."""
+    queryset = user.large_dataset.all()
+    
+    # Process in chunks to avoid memory issues
+    for item in queryset.iterator(chunk_size=1000):
+        yield self.serialize_item(item)
+
+# In your exporter:
+builder.add_jsonl_file('large_data.jsonl', self.get_user_data(user))
 ```
 
 ---

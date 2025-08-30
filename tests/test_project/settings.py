@@ -248,3 +248,26 @@ ACCOUNT_ADAPTER = 'django_myuser.adapters.MyAccountAdapter'
 
 # Fix Facebook configuration
 SOCIALACCOUNT_PROVIDERS['facebook']['LOCALE_FUNC'] = lambda request: 'en_US'
+
+# Media files (for file uploads and exports)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# django-myuser configuration
+DJANGO_MYUSER = {
+    # Data exporter configuration
+    'DATA_EXPORTER_CLASS': 'django_myuser.exporters.DefaultUserDataExporter',
+    
+    # File export settings
+    'EXPORT_FILE_RETENTION_DAYS': 7,  # How long to keep export files
+    'EXPORT_FILE_PATH': 'data_exports/',  # Path relative to MEDIA_ROOT
+    
+    # Base URL for generating download links in emails
+    'BASE_URL': 'http://localhost:8000',  # Change in production
+    
+    # Cleanup task schedule (for periodic_task or celery beat)
+    'EXPORT_CLEANUP_SCHEDULE': {
+        'hour': 2,  # Run at 2 AM daily
+        'minute': 0,
+    },
+}

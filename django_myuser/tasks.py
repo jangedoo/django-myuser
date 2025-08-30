@@ -121,9 +121,11 @@ def process_data_request(request_id):
     Args:
         request_id: UUID of the DataRequest instance
     """
-    from .models import DataRequest
+    from .models import DataRequest, DataExportFile
+    from .exporters import export_user_data
     from django.contrib.auth import get_user_model
-    import json
+    from django.conf import settings
+    import os
     
     User = get_user_model()
     
@@ -132,44 +134,50 @@ def process_data_request(request_id):
         user = data_request.user
         
         if data_request.request_type == DataRequest.RequestType.EXPORT:
-            # Export user data
-            user_data = {
-                'user_info': {
-                    'username': user.username,
-                    'email': user.email,
-                    'first_name': user.first_name,
-                    'last_name': user.last_name,
-                    'date_joined': user.date_joined.isoformat(),
-                    'last_login': user.last_login.isoformat() if user.last_login else None,
-                },
-                'profile': {
-                    'marketing_consent': user.profile.marketing_consent,
-                    'marketing_consent_updated_at': user.profile.marketing_consent_updated_at.isoformat() if user.profile.marketing_consent_updated_at else None,
-                },
-                'sessions': [
-                    {
-                        'ip_address': session.ip_address,
-                        'user_agent': session.user_agent,
-                        'last_activity': session.last_activity.isoformat(),
-                        'created_at': session.created_at.isoformat(),
-                    }
-                    for session in user.usersession_set.all()
-                ]
-            }
+            # Use exporter to generate file - exporters handle all data collection
+            file_path = export_user_data(data_request, user)
             
-            # Send data export email
+            # Get file size
+            full_path = os.path.join(settings.MEDIA_ROOT, file_path)
+            file_size = os.path.getsize(full_path)
+            
+            # Create DataExportFile record
+            export_file = DataExportFile.objects.create(
+                data_request=data_request,
+                file_path=file_path,
+                file_size=file_size
+            )
+            
+            # Build download URL
+            from django.contrib.sites.models import Site
+            try:
+                site = Site.objects.get_current()
+                domain = f"https://{site.domain}"
+            except:
+                # Fallback if sites framework not configured
+                config = getattr(settings, 'DJANGO_MYUSER', {})
+                domain = config.get('BASE_URL', 'https://example.com')
+            
+            download_url = f"{domain}/api/auth/data-export/download/{export_file.download_token}/"
+            
+            # Send notification email with download link
             send_async_email.delay(
                 subject="Your data export is ready",
                 template_name="account/email/data_export",
                 context={
-                    'user': user,
-                    'data': json.dumps(user_data, indent=2)
+                    'user_id': str(user.id),
+                    'username': user.username,
+                    'email': user.email,
+                    'download_token': export_file.download_token,
+                    'download_url': download_url,
+                    'expires_at': export_file.expires_at.isoformat(),
+                    'file_size_mb': round(file_size / (1024 * 1024), 2)
                 },
                 to_email=user.email
             )
             
             data_request.status = DataRequest.RequestStatus.COMPLETED
-            data_request.notes = "Data export completed successfully"
+            data_request.notes = "Data export file created successfully"
             
         elif data_request.request_type == DataRequest.RequestType.DELETE:
             # This is a sensitive operation - mark as completed but don't actually delete
@@ -181,7 +189,11 @@ def process_data_request(request_id):
             send_async_email.delay(
                 subject="Account deletion request processed",
                 template_name="account/email/account_deletion",
-                context={'user': user},
+                context={
+                    'user_id': str(user.id),
+                    'username': user.username,
+                    'email': user.email
+                },
                 to_email=user.email
             )
         
@@ -201,3 +213,48 @@ def process_data_request(request_id):
             pass
         
         raise e
+
+
+@shared_task
+def cleanup_expired_exports():
+    """
+    Cleanup expired data export files.
+    
+    This task should be run periodically to clean up old export files
+    and their database records.
+    """
+    from .models import DataExportFile
+    from django.utils import timezone
+    from django.conf import settings
+    import os
+    
+    # Find expired files
+    expired_files = DataExportFile.objects.filter(
+        expires_at__lt=timezone.now(),
+        deleted_at__isnull=True
+    )
+    
+    cleanup_count = 0
+    error_count = 0
+    
+    for export_file in expired_files:
+        try:
+            # Delete physical file
+            full_path = os.path.join(settings.MEDIA_ROOT, export_file.file_path)
+            if os.path.exists(full_path):
+                os.remove(full_path)
+            
+            # Soft delete database record
+            export_file.delete()
+            cleanup_count += 1
+            
+        except Exception as e:
+            error_count += 1
+            # Log error but continue with other files
+            print(f"Failed to clean up export file {export_file.id}: {str(e)}")
+    
+    result_message = f"Cleaned up {cleanup_count} expired export files"
+    if error_count > 0:
+        result_message += f" (with {error_count} errors)"
+    
+    return result_message

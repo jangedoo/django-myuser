@@ -5,12 +5,17 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.signals import user_logged_out
+from django.http import HttpResponse, Http404, FileResponse
+from django.conf import settings
+from django.utils import timezone
+import os
+import mimetypes
 
 from .serializers import (
     LogoutSerializer, ProfileSerializer, DataRequestSerializer, 
     UserSessionSerializer, CustomTokenObtainPairSerializer
 )
-from .models import Profile, DataRequest, UserSession
+from .models import Profile, DataRequest, UserSession, DataExportFile
 from .throttles import (
     LoginRateThrottle, 
     AuthenticatedUserRateThrottle, 
@@ -101,3 +106,63 @@ class UserSessionDetailView(generics.DestroyAPIView):
 
     def get_queryset(self):
         return UserSession.objects.filter(user=self.request.user)
+
+
+class DataExportDownloadView(APIView):
+    """
+    Secure download endpoint for user data export files.
+    
+    Uses download tokens for authentication instead of requiring login.
+    This allows users to download their data even if they've forgotten their password.
+    """
+    
+    def get(self, request, token):
+        try:
+            # Find the export file by token
+            export_file = DataExportFile.objects.get(
+                download_token=token,
+                deleted_at__isnull=True
+            )
+            
+            # Check if file has expired
+            if export_file.is_expired():
+                raise Http404("Download link has expired")
+            
+            # Check if file exists on disk
+            full_path = os.path.join(settings.MEDIA_ROOT, export_file.file_path)
+            if not os.path.exists(full_path):
+                raise Http404("Export file not found")
+            
+            # Increment download counter
+            export_file.download_count += 1
+            export_file.save(update_fields=['download_count'])
+            
+            # Determine content type
+            content_type, _ = mimetypes.guess_type(full_path)
+            if not content_type:
+                content_type = 'application/octet-stream'
+            
+            # Generate filename for download
+            user = export_file.data_request.user
+            timestamp = export_file.created_at.strftime('%Y%m%d_%H%M%S')
+            download_filename = f"user_data_export_{user.username}_{timestamp}.zip"
+            
+            # Create file response
+            response = FileResponse(
+                open(full_path, 'rb'),
+                content_type=content_type,
+                as_attachment=True,
+                filename=download_filename
+            )
+            
+            # Add security headers
+            response['X-Content-Type-Options'] = 'nosniff'
+            response['X-Frame-Options'] = 'DENY'
+            
+            return response
+            
+        except DataExportFile.DoesNotExist:
+            raise Http404("Invalid download token")
+        except Exception as e:
+            # Log the error in production
+            raise Http404("Download failed")

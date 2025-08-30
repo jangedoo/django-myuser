@@ -1,4 +1,4 @@
-Hello {{ user.get_full_name|default:user.username }},
+Hello {{ username }},
 
 Your account deletion request has been processed.
 

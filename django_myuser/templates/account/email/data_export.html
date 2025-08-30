@@ -8,16 +8,34 @@
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background-color: #6f42c1; color: white; padding: 20px; text-align: center; }
         .content { padding: 20px; background-color: #f8f9fa; }
-        .data-export { 
-            background-color: #f8f9fa; 
-            border: 1px solid #dee2e6; 
+        .download-info { 
+            background-color: #e7f3ff; 
+            border: 1px solid #bee5eb; 
             padding: 15px; 
             border-radius: 4px; 
             margin: 15px 0;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 400px;
-            overflow-y: auto;
+        }
+        .download-button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .download-button:hover {
+            background-color: #0056b3;
+            color: white;
+        }
+        .security-notes {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-size: 14px;
         }
         .footer { text-align: center; font-size: 12px; color: #666; margin-top: 20px; }
     </style>
@@ -28,17 +46,36 @@
             <h1>📄 Data Export Ready</h1>
         </div>
         <div class="content">
-            <h2>Hello {{ user.get_full_name|default:user.username }},</h2>
+            <h2>Hello {{ username }},</h2>
             
             <p>Your data export request has been processed successfully.</p>
             
-            <p>Your personal data is shown below:</p>
+            <p>Your personal data export is ready for download. The file contains all the personal information we have on file for your account.</p>
             
-            <div class="data-export">
-                <pre>{{ data }}</pre>
+            <div class="download-info">
+                <h3>📦 Download Details</h3>
+                <ul>
+                    <li><strong>File Size:</strong> {{ file_size_mb }} MB</li>
+                    <li><strong>Format:</strong> ZIP file containing JSON data</li>
+                    <li><strong>Expires:</strong> {{ expires_at|date:"F j, Y, g:i A" }}</li>
+                </ul>
+                
+                <p style="text-align: center;">
+                    <a href="{{ download_url }}" class="download-button">
+                        📥 Download Your Data
+                    </a>
+                </p>
             </div>
             
-            <p>This export includes all the personal information we have on file for your account.</p>
+            <div class="security-notes">
+                <h4>🔒 Security Notes</h4>
+                <ul>
+                    <li>This link is unique to your request and expires on {{ expires_at|date:"F j, Y, g:i A" }}</li>
+                    <li>The download is tracked for security purposes</li>
+                    <li>Please download your data promptly as the file will be automatically deleted after expiration</li>
+                    <li>Only someone with access to this email can use this download link</li>
+                </ul>
+            </div>
             
             <p>If you have any questions about this data export, please contact our support team.</p>
         </div>

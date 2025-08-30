@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.utils.html import format_html
 from django.utils import timezone
-from .models import Profile, DataRequest, UserSession, AuditLog
+from .models import Profile, DataRequest, DataExportFile, UserSession, AuditLog
 
 User = get_user_model()
 
@@ -60,6 +60,77 @@ class DataRequestAdmin(admin.ModelAdmin):
     def mark_as_failed(self, request, queryset):
         updated = queryset.update(status=DataRequest.RequestStatus.FAILED)
         self.message_user(request, f'{updated} requests were marked as failed.')
+
+
+@admin.register(DataExportFile)
+class DataExportFileAdmin(admin.ModelAdmin):
+    list_display = ['data_request_user', 'data_request_type', 'file_size_mb', 'download_count', 'expires_at', 'is_expired_status', 'created_at']
+    list_filter = ['expires_at', 'created_at', 'data_request__request_type']
+    search_fields = ['data_request__user__username', 'data_request__user__email', 'download_token']
+    readonly_fields = ['id', 'data_request', 'file_path', 'file_size', 'download_token', 'download_count', 'created_at', 'updated_at', 'deleted_at']
+    date_hierarchy = 'created_at'
+    actions = ['cleanup_expired_files']
+    
+    fieldsets = (
+        (None, {
+            'fields': ('data_request', 'file_path', 'file_size', 'expires_at')
+        }),
+        ('Security', {
+            'fields': ('download_token', 'download_count'),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('id', 'created_at', 'updated_at', 'deleted_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('data_request__user')
+
+    def data_request_user(self, obj):
+        return obj.data_request.user.username
+    data_request_user.short_description = 'User'
+    data_request_user.admin_order_field = 'data_request__user__username'
+
+    def data_request_type(self, obj):
+        return obj.data_request.get_request_type_display()
+    data_request_type.short_description = 'Request Type'
+    data_request_type.admin_order_field = 'data_request__request_type'
+
+    def file_size_mb(self, obj):
+        return f"{obj.file_size / (1024 * 1024):.2f} MB"
+    file_size_mb.short_description = 'File Size'
+    file_size_mb.admin_order_field = 'file_size'
+
+    def is_expired_status(self, obj):
+        if obj.is_expired():
+            return format_html('<span style="color: red;">●</span> Expired')
+        return format_html('<span style="color: green;">●</span> Active')
+    is_expired_status.short_description = 'Status'
+
+    @admin.action(description='Cleanup selected expired export files')
+    def cleanup_expired_files(self, request, queryset):
+        import os
+        from django.conf import settings
+        
+        expired_files = queryset.filter(expires_at__lt=timezone.now())
+        deleted_count = 0
+        
+        for export_file in expired_files:
+            try:
+                # Delete physical file
+                full_path = os.path.join(settings.MEDIA_ROOT, export_file.file_path)
+                if os.path.exists(full_path):
+                    os.remove(full_path)
+                # Soft delete database record
+                export_file.delete()
+                deleted_count += 1
+            except Exception as e:
+                self.message_user(request, f'Error deleting {export_file}: {e}', level='ERROR')
+        
+        if deleted_count > 0:
+            self.message_user(request, f'{deleted_count} expired export files were cleaned up.')
 
 
 @admin.register(UserSession)
