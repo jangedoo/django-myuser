@@ -1,7 +1,9 @@
 import uuid
+import secrets
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
 
 
 class SoftDeleteManager(models.Manager):
@@ -55,6 +57,57 @@ class DataRequest(BaseModel):
 
     def __str__(self):
         return f"{self.user.username} - {self.get_request_type_display()}"
+
+
+class DataExportFile(BaseModel):
+    data_request = models.OneToOneField(
+        DataRequest, 
+        on_delete=models.CASCADE, 
+        related_name='export_file'
+    )
+    file_path = models.CharField(
+        max_length=500,
+        help_text="Path to the exported file relative to MEDIA_ROOT"
+    )
+    file_size = models.PositiveBigIntegerField(
+        help_text="File size in bytes"
+    )
+    download_token = models.CharField(
+        max_length=64,
+        unique=True,
+        help_text="Secure token for file download"
+    )
+    expires_at = models.DateTimeField(
+        help_text="When the file expires and should be deleted"
+    )
+    download_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of times file has been downloaded"
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['download_token']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if not self.download_token:
+            self.download_token = secrets.token_urlsafe(48)
+        
+        if not self.expires_at:
+            from django.apps import apps
+            config = getattr(settings, 'DJANGO_MYUSER', {})
+            retention_days = config.get('EXPORT_FILE_RETENTION_DAYS', 7)
+            self.expires_at = timezone.now() + timedelta(days=retention_days)
+        
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"Export file for {self.data_request}"
 
 
 class UserSession(BaseModel):

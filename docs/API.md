@@ -338,6 +338,46 @@ Then all endpoints will be available at `/api/auth/`.
 - `COMPLETED`: Request processed successfully
 - `FAILED`: Request processing failed
 
+### Data Export File Download
+
+When an export request is completed, users receive an email with a secure download link. The export file can be downloaded using:
+
+**Endpoint:** `GET /data-export/download/{token}/`
+
+**Description:** Download data export file using secure token.
+
+**Authentication:** None required (token-based)
+
+**Path Parameters:**
+- `token`: Secure download token (64-character string)
+
+**Response (200 OK):**
+- **Content-Type:** `application/zip`
+- **Content-Disposition:** `attachment; filename="user_export_123_20240101_120000.zip"`
+- **Body:** ZIP file containing exported data
+
+**ZIP File Contents:**
+- `user_info.json` - Basic user information
+- `profile.json` - User profile data and marketing consent
+- `sessions.csv` - Session history in CSV format
+- `audit_logs.jsonl` - Audit logs in JSON Lines format
+- `export_info.json` - Export metadata and version information
+
+**Error Responses:**
+- `404 Not Found`: Invalid token, expired file, or file already downloaded
+- `410 Gone`: Export file has been deleted due to expiration
+
+**Example:**
+```bash
+curl -o user_data.zip https://example.com/api/auth/data-export/download/HXB8x_MrkblZl3qJN6I9Rai4Dupr4Ax_xIF2EZG4X0zHLalEi0MPsIVzeyAPu5C4/
+```
+
+**Security Notes:**
+- Tokens are single-use and expire after the configured retention period (default: 7 days)
+- Each download is logged for security purposes
+- No authentication required - token provides security
+- Files are automatically cleaned up after expiration
+
 ---
 
 ## Session Management
@@ -499,6 +539,7 @@ The following endpoints have built-in rate limiting:
 | `POST /token/` | 10/min | Per IP |
 | `POST /social/*/` | 5/min | Per IP |
 | `POST /data-requests/` | 2/day | Per User |
+| `GET /data-export/download/*` | None | Token-based |
 
 When rate limited, the API returns:
 

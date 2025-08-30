@@ -1,12 +1,23 @@
-Hello {{ user.get_full_name|default:user.username }},
+Hello {{ username }},
 
 Your data export request has been processed successfully.
 
-Your personal data is attached below:
+Your personal data export is ready for download. The file contains all the personal information we have on file for your account.
 
-{{ data }}
+Download Details:
+- File Size: {{ file_size_mb }} MB
+- Format: ZIP file containing JSON data
+- Expires: {{ expires_at|date:"F j, Y, g:i A" }}
 
-This export includes all the personal information we have on file for your account.
+To download your data, click the secure link below:
+{{ download_url }}
+
+This download link will expire on {{ expires_at|date:"F j, Y, g:i A" }} for your security. After this date, you'll need to request a new export.
+
+Security Notes:
+- This link is unique to your request and can only be used by someone with access to this email
+- The download is tracked for security purposes
+- Please download your data promptly as the file will be automatically deleted after expiration
 
 If you have any questions about this data export, please contact our support team.
 

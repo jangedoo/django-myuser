@@ -20,7 +20,9 @@ Built for very specific use case for my personal needs. Use at your own risk. Ex
 - User session tracking and management
 
 🛡️ **Security & Compliance**
-- GDPR data export and deletion requests
+- GDPR data export and deletion requests with file-based downloads
+- Pluggable data export system for custom data collection
+- Automatic cleanup of expired export files
 - Comprehensive audit logging
 - Rate limiting on sensitive endpoints
 - Marketing consent management
@@ -262,6 +264,7 @@ ACCOUNT_USER_MODEL_EMAIL_FIELD = 'email'
 |----------|--------|-------------|
 | `/api/auth/profile/` | GET/PUT | User profile management |
 | `/api/auth/data-requests/` | GET/POST | GDPR data requests |
+| `/api/auth/data-export/download/{token}/` | GET | Download export files |
 | `/api/auth/sessions/` | GET | List active sessions |
 | `/api/auth/sessions/{id}/` | DELETE | Revoke specific session |
 
@@ -290,6 +293,9 @@ Tracks active user sessions for security monitoring.
 ### AuditLog
 Comprehensive logging of security-sensitive events.
 
+### DataExportFile
+Manages secure download tokens and file lifecycle for GDPR exports.
+
 ## Email Templates
 
 The package includes customizable email templates for:
@@ -317,16 +323,52 @@ templates/
         └── account_connected.html
 ```
 
-## GDPR Compliance
+## GDPR Compliance & Data Export System
 
-### Data Export
-Users can request data exports through the API:
+### Data Export with File Downloads
+Users can request data exports that are processed asynchronously and delivered via secure download links:
 
 ```python
+# Request export
 POST /api/auth/data-requests/
 {
     "request_type": "EXPORT"
 }
+
+# User receives email with download link when ready
+# Download via secure token (no authentication required)
+GET /api/auth/data-export/download/{secure-token}/
+```
+
+**Export Features:**
+- Multi-file ZIP archives with organized data (JSON, CSV, JSONL)
+- Memory-efficient processing for large datasets
+- Secure token-based downloads with expiration
+- Automatic cleanup of expired files
+- Email notifications when export is ready
+
+### Custom Data Exporters
+Create custom exporters for application-specific data:
+
+```python
+# settings.py
+DJANGO_MYUSER = {
+    'DATA_EXPORTER_CLASS': 'myapp.exporters.CustomUserDataExporter',
+    'EXPORT_FILE_PATH': 'user_exports/',
+    'EXPORT_FILE_RETENTION_DAYS': 14,
+}
+
+# myapp/exporters.py
+from django_myuser.exporters import UserDataExporter
+
+class CustomUserDataExporter(UserDataExporter):
+    def generate_data(self, data_request, user):
+        with self.create_export_builder(user) as builder:
+            # Add custom app data
+            builder.add_json_file('orders.json', self.get_user_orders(user))
+            builder.add_csv_file('activity.csv', self.get_user_activity(user))
+            
+            return builder.create_archive('custom_export')
 ```
 
 ### Data Deletion
@@ -378,18 +420,27 @@ Access logs through the Django admin or API.
 
 ## Running Celery
 
-Start Celery worker for async email processing:
+Start Celery worker for async email processing and data exports:
 
 ```bash
 # Basic worker
 celery -A your_project worker -l info
 
-# With beat scheduler
+# With beat scheduler (recommended for cleanup tasks)
 celery -A your_project worker -B -l info
 
 # Separate beat process
 celery -A your_project beat -l info
+
+# Periodic cleanup of expired export files
+celery -A your_project worker -B --scheduler=django_celery_beat.schedulers:DatabaseScheduler
 ```
+
+### Celery Tasks
+The package includes these Celery tasks:
+- `send_async_email` - Send notification emails
+- `process_data_request` - Process export/deletion requests  
+- `cleanup_expired_exports` - Remove expired export files (run daily)
 
 ## Testing
 

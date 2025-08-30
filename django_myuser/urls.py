@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import (
 
 from .views import (
     CustomTokenObtainPairView, LogoutView, ProfileView, DataRequestView, 
-    UserSessionListView, UserSessionDetailView
+    UserSessionListView, UserSessionDetailView, DataExportDownloadView
 )
 from .social_views import (
     GoogleSocialLoginView,
@@ -27,6 +27,7 @@ urlpatterns = [
     # User profile and data management
     path('profile/', ProfileView.as_view(), name='profile'),
     path('data-requests/', DataRequestView.as_view(), name='data_requests'),
+    path('data-export/download/<str:token>/', DataExportDownloadView.as_view(), name='data_export_download'),
     path('sessions/', UserSessionListView.as_view(), name='sessions_list'),
     path('sessions/<uuid:pk>/', UserSessionDetailView.as_view(), name='sessions_detail'),
     

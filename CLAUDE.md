@@ -13,6 +13,7 @@ django-myuser is a comprehensive Django package for advanced user authentication
 - **BaseModel**: Abstract model with UUID primary keys, timestamps, and soft deletion
 - **Profile**: Extended user profiles with GDPR marketing consent tracking  
 - **DataRequest**: GDPR compliance for data export/deletion requests
+- **DataExportFile**: File tracking for secure data export downloads with token-based authentication
 - **UserSession**: Session tracking for security monitoring
 - **AuditLog**: Comprehensive security event logging
 
@@ -23,7 +24,8 @@ django-myuser is a comprehensive Django package for advanced user authentication
 - `django_myuser/social_views.py`: Social authentication views
 - `django_myuser/serializers.py`: DRF serializers
 - `django_myuser/urls.py`: URL routing
-- `django_myuser/tasks.py`: Celery async tasks
+- `django_myuser/tasks.py`: Celery async tasks (data processing, cleanup)
+- `django_myuser/exporters.py`: Pluggable data export system
 - `django_myuser/signals.py`: Django signals for user creation
 - `django_myuser/audit_signals.py`: Audit logging signals
 - `django_myuser/adapters.py`: Custom allauth adapters
@@ -91,6 +93,7 @@ Located in `tests/test_project/settings.py`:
 ### User Management  
 - `GET/PUT /api/auth/profile/` - User profile management
 - `GET/POST /api/auth/data-requests/` - GDPR data requests
+- `GET /api/auth/data-export/download/{token}/` - Secure data export download
 - `GET /api/auth/sessions/` - List active sessions
 - `DELETE /api/auth/sessions/{id}/` - Revoke session
 
@@ -122,8 +125,109 @@ Located in `tests/test_project/settings.py`:
 - JWT tokens with rotation and blacklisting
 - Comprehensive audit logging for all security events
 - Rate limiting on sensitive operations
-- GDPR compliance with data export/deletion
+- GDPR compliance with pluggable data export system and secure file downloads
 - Soft deletion preserves audit trails
+
+## Data Export System
+
+django-myuser provides a flexible, pluggable data export system for GDPR compliance that allows applications to customize how user data is exported.
+
+### Architecture
+
+The data export system consists of:
+- **UserDataExporter**: Abstract base class for creating custom exporters
+- **DefaultUserDataExporter**: Built-in exporter that exports core django-myuser data
+- **DataExportFile**: Model tracking export files with secure token-based downloads
+- **Celery Tasks**: Asynchronous processing and cleanup of export files
+
+### Basic Usage
+
+1. **Create Data Request**: User requests data export via API
+2. **Async Processing**: Celery task processes request and generates file
+3. **Email Notification**: User receives email with secure download link
+4. **Secure Download**: Token-based file download with expiration
+5. **Automatic Cleanup**: Expired files are cleaned up periodically
+
+### Custom Data Exporters
+
+Create custom exporters to include application-specific data:
+
+```python
+# myapp/exporters.py
+from django_myuser.exporters import UserDataExporter
+
+class MyAppDataExporter(UserDataExporter):
+    def generate_data(self, data_request, user, user_data):
+        # Add your app's data
+        user_data['orders'] = list(user.orders.values())
+        user_data['preferences'] = user.preferences.to_dict()
+        user_data['custom_data'] = self.get_custom_data(user)
+        
+        # Create and return ZIP file
+        return self.create_zip_file(user_data, user, 'myapp_export')
+    
+    def get_custom_data(self, user):
+        # Your custom data collection logic
+        return {'example': 'data'}
+```
+
+### Configuration
+
+```python
+# settings.py
+DJANGO_MYUSER = {
+    # Custom exporter class (optional)
+    'DATA_EXPORTER_CLASS': 'myapp.exporters.MyAppDataExporter',
+    
+    # File retention (default: 7 days)
+    'EXPORT_FILE_RETENTION_DAYS': 7,
+    
+    # Export storage path (relative to MEDIA_ROOT)
+    'EXPORT_FILE_PATH': 'data_exports/',
+    
+    # Base URL for download links in emails
+    'BASE_URL': 'https://example.com',
+    
+    # Cleanup schedule for celery beat
+    'EXPORT_CLEANUP_SCHEDULE': {
+        'hour': 2,  # 2 AM daily
+        'minute': 0,
+    },
+}
+
+# Required for file storage
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+```
+
+### Celery Tasks
+
+The system includes two main Celery tasks:
+
+- `process_data_request(request_id)`: Processes export requests asynchronously
+- `cleanup_expired_exports()`: Cleans up expired files (run periodically)
+
+### Security Features
+
+- **Token-based downloads**: Secure, unique tokens for file access
+- **File expiration**: Automatic cleanup of old export files
+- **Download tracking**: Monitor file access for security auditing
+- **No authentication required**: Download links work independently of user login
+
+### Testing
+
+The system includes comprehensive tests:
+
+```bash
+# Test exporters
+pytest tests/unit/test_exporters.py
+
+# Test tasks
+pytest tests/unit/test_tasks.py
+
+# Test full workflow
+pytest tests/integration/test_data_export_workflow.py
+```
 
 ## Common Patterns
 
@@ -162,3 +266,6 @@ assert AuditLog.objects.filter(
 - Global test fixtures: `tests/conftest.py`
 - Test factories: `tests/factories.py`
 - Dependencies: `pyproject.toml`
+
+# Few important bits
+- use type hints
